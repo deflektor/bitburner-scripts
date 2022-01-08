@@ -1,6 +1,6 @@
 let doc = eval("document"),
     f = ["CSEC", "avmnite-02h", "I.I.I.I", "run4theh111z", "w0r1d_d43m0n"],
-    css = `<style id="scanCSS">
+    css = `<style id="scanCSSt">
         .sc {white-space:pre; color:#ccc; font:14px monospace; line-height: 16px; }
         .sc .s {color:#080;cursor:pointer;text-decoration:underline}
         .sc .f {color:#088}
@@ -23,8 +23,10 @@ export let main = ns => {
         myHack = ns.getHackingLevel(),
         fName = x => {
             let reqHack = ns.getServerRequiredHackingLevel(x);
+            let moneyAvail = Math.round(ns.getServerMoneyAvailable(x)/1000000);
             return `<a class="s${f.includes(x) ? " f" : ""}${ns.hasRootAccess(x) ? " r" : ""}">${x}</a>` +
-                ` <span class="hack ${(reqHack <= myHack ? 'green' : 'red')}">(${reqHack})</span>` +
+                ` <span class="hack ${(reqHack <= myHack ? 'green' : 'red' )}">(${reqHack})     </span>` +
+                ` <span style="color:${(moneyAvail>0      ? 'sienna' : 'green')}"> \$${moneyAvail}m</span>` +
                 `${' @'.repeat(ns.ls(x, ".cct").length)}`;
         };
     let tcommand = x => {
