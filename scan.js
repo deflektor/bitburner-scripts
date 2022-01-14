@@ -23,10 +23,12 @@ export let main = ns => {
         myHack = ns.getHackingLevel(),
         fName = x => {
             let reqHack = ns.getServerRequiredHackingLevel(x);
+            let reqPort = ns.getServerNumPortsRequired(x);
             let moneyAvail = Math.round(ns.getServerMoneyAvailable(x)/1000000);
             return `<a class="s${f.includes(x) ? " f" : ""}${ns.hasRootAccess(x) ? " r" : ""}">${x}</a>` +
                 ` <span class="hack ${(reqHack <= myHack ? 'green' : 'red' )}">(${reqHack})     </span>` +
                 ` <span style="color:${(moneyAvail>0      ? 'sienna' : 'green')}"> \$${moneyAvail}m</span>` +
+                ` <span class="hack ${(reqHack <= myHack ? 'green' : 'red' )}">(${reqPort})     </span>` +
                 `${' @'.repeat(ns.ls(x, ".cct").length)}`;
         };
     let tcommand = x => {
