@@ -122,7 +122,7 @@ export async function main(ns) {
     if (!(4 in dictSourceFiles))
         return ns.tprint("ERROR: You cannot automate working for factions until you have unlocked singularity access (SF4).");
     else if (dictSourceFiles[4] < 3)
-        return ns.tprint(`WARNING: Singularity functions are much more expensive with lower levels of SF4 (you have SF4.${dictSourceFiles[4]}). ` +
+        ns.tprint(`WARNING: Singularity functions are much more expensive with lower levels of SF4 (you have SF4.${dictSourceFiles[4]}). ` +
             `You may encounter RAM issues with and have to wait until you have more RAM available to run this script successfully.`);
 
     let bitnodeMults = await tryGetBitNodeMultipliers(ns); // Find out the current bitnode multipliers (if available)
@@ -243,7 +243,7 @@ export async function main(ns) {
         // Strategy 8: Commit crimes for a while longer, then loop to see if there anything more we can do for the above factions
         if (noCrime) {
             ns.print(`--no-crime (or --no-focus): Crimes are disabled, so sleeping for a while (30s) then checking back on whether there's any work to be done...`);
-            ns.sleep(30000);
+            await ns.sleep(30000);
         } else await crimeForKillsKarmaStats(ns, 0, -ns.heart.break() + 100, 0);
     }
 }
