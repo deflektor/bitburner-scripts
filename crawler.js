@@ -1,3 +1,6 @@
+let printNewlineFlag = false;
+const INDENT_SPACE = 3;
+
 /** @param {NS} ns **/
 export async function main(ns) {
     let home = new Object();
@@ -30,7 +33,9 @@ function printMap(ns, node, nodeMap, indent) {
     ns.tprintf(indent + "%s%s%s%s", node.name, ns.hasRootAccess(node.name) ? "(Y)" : "(N)", " Money: ", Math.round(ns.getServerMoneyAvailable(node.name)));
     nodeMap.delete(node.name);
     indent = adjustIndent(indent, node, nodeMap);
-    printIndent(ns, indent, node);
+    if (printNewlineFlag) {
+        printIndent(ns, indent, node);
+    }
 
     node.neighbors.forEach(adjacentName => {
         if (nodeMap.has(adjacentName)) {
@@ -47,7 +52,6 @@ function printIndent(ns, indent, node) {
 }
 
 function adjustIndent(indent, node, nodeMap) {
-    const INDENT_SPACE = 6;
     for (let i = 0; i < INDENT_SPACE; i++) {
         if (i === 0 && hasMoreSiblings(node, nodeMap)) {
             indent += "|";
