@@ -40,7 +40,7 @@ export let main = ns => {
             let server = serverInfo(x); // Costs 2 GB. If you can't don't need backdoor links, uncomment the alternate implementations below
             let reqHack = server.requiredHackingSkill; // ns.getServerRequiredHackingLevel(x);
             let rooted = server.hasAdminRights; // ns.hasRootAccess(x);
-            let shouldBackdoor = !server?.backdoorInstalled && reqHack <= myHack && x != 'home' && !server.purchasedByPlayer;
+            let shouldBackdoor = !server?.backdoorInstalled && reqHack <= myHack && x != 'home' && rooted && !server.purchasedByPlayer;
             let contracts = ns.ls(x, ".cct"); // Find out whether there are any contracts on the server
             return `<span class="w" id="${x}">` +
                 `<a class="s${factionServers.includes(x) ? " f" : ""}${rooted ? " r" : ""}">${x}</a>
@@ -78,4 +78,3 @@ export let main = ns => {
     doc.querySelectorAll(".sc.new .backdoor").forEach(q => q.addEventListener('click', tcommand.bind(null, r[q.parentNode.childNodes[0].childNodes[0].nodeValue] + ";backdoor")));
     doc.querySelector(".sc.new").classList['remove']("new");
 };
-
