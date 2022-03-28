@@ -8,7 +8,7 @@ const argsSchema = [
     ['first', []], // Grind rep with these factions first. Also forces a join of this faction if we normally wouldn't (e.g. no desired augs or all augs owned)
     ['skip', []], // Don't work for these factions
     ['o', false], // Immediately grind company factions for rep after getting their invite, rather than first getting all company invites we can
-    ['desired-stats', null], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
+    ['desired-stats', []], // Factions will be removed from our 'early-faction-order' once all augs with these stats have been bought out
     ['no-focus', false], // Disable doing work that requires focusing (crime), and forces study/faction/company work to be non-focused (even if it means incurring a penalty)
     ['no-studying', false], // Disable studying for Charisma. Useful in longer resets when Cha augs are insufficient to meet promotion requirements
     ['no-coding-contracts', false], // Disable purchasing coding contracts for reputation
@@ -104,7 +104,7 @@ const breakToMainLoop = () => Date.now() > mainLoopStart + checkForNewPriorities
 export async function main(ns) {
     disableLogs(ns, ['sleep']);
     options = ns.flags(argsSchema);
-    const desiredAugStats = (options['desired-stats'] || []);
+    const desiredAugStats = options['desired-stats'];
     firstFactions = options.first = (options.first || []).map(f => f.replaceAll('_', ' '));
     let skipFactionsConfig = options.skip = (options.skip || []).map(f => f.replaceAll('_', ' '));
     noFocus = options['no-focus'];
@@ -158,7 +158,7 @@ export async function main(ns) {
             //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
             // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
             mostExpensiveDesiredAugByFaction = Object.fromEntries(factions.map(f => [f, dictFactionAugs[f]
-                .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || !desiredAugStats ||
+                .filter(aug => !ownedAugmentations.includes(aug) && (Object.keys(dictAugStats[aug]).length == 0 || desiredAugStats.length == 0 ||
                     Object.keys(dictAugStats[aug]).some(key => desiredAugStats.some(stat => key.includes(stat)))))
                 .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
             //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
@@ -199,13 +199,15 @@ export async function main(ns) {
                 if (!playerGang) { // Check if we've joined a gang since our last iteration
                     const gangInfo = await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt');
                     playerGang = gangInfo ? gangInfo.faction : null;
-                    if (ns.heart.break() <= karmaThreshold) { // Start trying to earn gang faction invites if we're close to unlocking gangs
+                }
+                if (ns.heart.break() <= karmaThreshold) { // Start trying to earn gang faction invites if we're close to unlocking gangs
+                    if (!playerGang) {
                         log(ns, `INFO: We are nearing the Karma required to unlock gangs (${formatNumberShort(ns.heart.break())} / -54K). Prioritize earning gang faction invites.`);
                         for (const factionName of desiredGangFactions)
                             await earnFactionInvite(ns, factionName);
-                        // No point in working for any factions that will become gangs, since we will lose all rep with them
-                        skipFactions = skipFactions.concat(allGangFactions.filter(f => !skipFactions.includes(f)));
                     }
+                    // Whether we're in a gang or will be soon, there's no point in working for any factions that will become gangs, since we will lose all rep with them
+                    skipFactions = skipFactions.concat(allGangFactions.filter(f => !skipFactions.includes(f)));
                 }
             }
 
@@ -544,7 +546,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         return ns.print(`We are not yet part of faction "${factionName}". Skipping working for faction...`);
     if (startingFavor >= repToDonate && !forceRep) // If we have already unlocked donations via favour - no need to grind for rep
         return ns.print(`Donations already unlocked for "${factionName}". You should buy access to augs. Skipping working for faction...`);
-    // Cannot work for gang factions. Detect if this is our gang faction!
+    // Cannot work for gang factions. Detect if this is a gang faction!
     if (playerGang && allGangFactions.includes(factionName))
         return ns.print(`"${factionName}" is an active gang faction. Cannot work for gang factions...`);
     if (forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) { // Special check to avoid pointless donation unlocking
