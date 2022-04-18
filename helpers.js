@@ -54,6 +54,7 @@ export function formatDateTime(datetime) { return datetime.toISOString(); }
 /** Format a duration (in milliseconds) as e.g. '1h 21m 6s' for big durations or e.g '12.5s' / '23ms' for small durations */
 export function formatDuration(duration) {
     if (duration < 1000) return `${duration.toFixed(0)}ms`
+    if (!isFinite(duration)) return 'forever (Infinity)'
     const portions = [];
     const msInHour = 1000 * 60 * 60;
     const hours = Math.trunc(duration / msInHour);
@@ -279,7 +280,7 @@ export async function autoRetry(ns, fnFunctionThatMayFail, fnSuccessCondition, e
 
 /** Helper to log a message, and optionally also tprint it and toast it
  * @param {NS} ns - The nestcript instance passed to your script's main entry point */
-export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = "", maxToastLength = 100) {
+export function log(ns, message = "", alsoPrintToTerminal = false, toastStyle = "", maxToastLength = Number.MAX_SAFE_INTEGER) {
     checkNsInstance(ns, '"log"');
     ns.print(message);
     if (alsoPrintToTerminal) ns.tprint(message);
