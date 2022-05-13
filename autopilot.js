@@ -6,9 +6,9 @@ import {
 
 const persistentLog = "log.autopilot.txt";
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
+const casinoFlagFile = "/Temp/ran-casino.txt";
 
 let options = null; // The options used at construction time
-// TODO: Currently these may as well be hard-coded, args are lost when various other scripts kill and restart us.
 const argsSchema = [ // The set of all command line arguments
 	['next-bn', 12], // If we destroy the current BN, the next BN to start
 	['disable-auto-destroy-bn', false], // Set to true if you do not want to auto destroy this BN when done
@@ -98,7 +98,7 @@ async function startUp(ns) {
 			`too expensive to run until you have bought a lot of home RAM.`, true);
 	}
 	if (player.playtimeSinceLastBitnode < 60 * 1000) // Skip initialization if we've been in the bitnode for more than 1 minute
-		await initializeNewBitnode(ns);
+		await initializeNewBitnode(ns, player);
 	return true;
 }
 
@@ -120,10 +120,8 @@ async function persistConfigChanges(ns) {
 
 /** Logic run once at the beginning of a new BN
  * @param {NS} ns */
-async function initializeNewBitnode(ns) {
-	// Clean up all temporary scripts, which will include stale temp files
-	// launchScriptHelper(ns, 'cleanup.js'); // No need, ascend.js and casino.js do this
-	// await ns.sleep(200); // Wait a short while for the dust to settle.
+async function initializeNewBitnode(ns, player) {
+	// Nothing to do here (yet)
 }
 
 /** Logic run periodically throughout the BN
@@ -285,11 +283,11 @@ async function checkOnRunningScripts(ns, player) {
 
 	// TODO: Take charge to stanek.acceptGift and place fragments before installing augs and ascending for the first time
 	// Once stanek's gift is accepted and not charged, launch it first
-	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched) {
-		stanekLaunched = true;
-		if (!findScript('stanek.js'))
-			launchScriptHelper(ns, 'stanek.js');
-		await ns.asleep(2000); // Stanek will launch a version of daemon that works with charging. Give it time so we detect it as started below.
+	let stanekRunning = (13 in unlockedSFs) && findScript('stanek.js') !== undefined;
+	if ((13 in unlockedSFs) && installedAugmentations.includes(`Stanek's Gift - Genesis`) && !stanekLaunched && !stanekRunning) {
+		stanekLaunched = true; // Once we've know we've launched stanek once, we never have to again this reset.
+		launchScriptHelper(ns, 'stanek.js');
+		stanekRunning = true;
 	}
 
 	// Ensure daemon.js is running in some form
@@ -305,9 +303,9 @@ async function checkOnRunningScripts(ns, player) {
 	if (options['enable-bladeburner']) daemonArgs.push('--run-script', getFilePath('bladeburner.js'));
 	// If we have SF4, but not level 3, instruct daemon.js to reserve additional home RAM
 	if ((4 in unlockedSFs) && unlockedSFs[4] < 3)
-		daemonArgs.push('--reserved-ram ', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
-	// Launch or re-launch daemon with the desired arguments
-	if (!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode")) {
+		daemonArgs.push('--reserved-ram', 32 * (unlockedSFs[4] == 2 ? 4 : 16));
+	// Launch or re-launch daemon with the desired arguments (only if it wouldn't get in the way of stanek charging)
+	if ((!daemon || player.hacking >= hackThreshold && !daemon.args.includes("--looping-mode")) && !stanekRunning) {
 		if (player.hacking >= hackThreshold)
 			log(ns, `INFO: Hack level (${player.hacking}) is >= ${hackThreshold} (--high-hack-threshold): Starting daemon.js in high-performance hacking mode.`);
 		launchScriptHelper(ns, 'daemon.js', daemonArgs);
@@ -356,9 +354,15 @@ async function checkOnRunningScripts(ns, player) {
  * @param {NS} ns 
  * @param {Player} player */
 async function maybeDoCasino(ns, player) {
-	const casinoFlagFile = "/Temp/ran-casino.txt";
 	if (ranCasino) return;
-	if (ns.read(casinoFlagFile)) return ranCasino = true;
+	const casinoRanFileSet = ns.read(casinoFlagFile);
+	// If the casino flag file is already set in first 10 minutes of the reset, and we don't have anywhere near the 10B it should give,
+	// it's likely a sign that the flag is wrong and we should run cleanup and let casino get run again to be safe.
+	if (player.playtimeSinceLastAug < 10 * 60 * 1000 && casinoRanFileSet && player.money + (await getStocksValue(ns, player)) < 8E9) {
+		launchScriptHelper(ns, 'cleanup.js');
+		await ns.sleep(200); // Wait a short while for the dust to settle.
+	} else if (casinoRanFileSet)
+		return ranCasino = true;
 	if (player.playtimeSinceLastAug < 60000) // If it's been less than 1 minute, wait a while to establish income
 		return;
 	if (player.money / player.playtimeSinceLastAug > 5e9 / 60000) // If we're making more than ~5b / minute, no need to run casino.
@@ -372,7 +376,6 @@ async function maybeDoCasino(ns, player) {
 	// Make sure "work-for-factions.js" is dead first, lest it steal focus and break the casino script before it has a chance to kill all scripts.
 	await killScript(ns, 'work-for-factions.js');
 
-	// TODO: Preserve the current script's state / args through the reset
 	const pid = launchScriptHelper(ns, 'casino.js', ['--kill-all-scripts', true, '--on-completion-script', ns.getScriptName()]);
 	if (pid) {
 		await waitForProcessToComplete(ns, pid);
@@ -463,9 +466,7 @@ async function maybeInstallAugmentations(ns, player) {
 
 	// Kick off ascend.js
 	let errLog;
-	const ascendArgs = ['--install-augmentations', true,
-		'--on-reset-script', ns.getScriptName(), // TODO: Preserve the current script's state / args through the reset		
-		'--bypass-stanek-warning', true] // TODO: Automate accepting stanek's gift now that we can
+	const ascendArgs = ['--install-augmentations', true, '--on-reset-script', ns.getScriptName()]
 	if (affordableAugCount == 0) // If we know we have 0 augs, but still wish to reset, we must enable soft resetting
 		ascendArgs.push("--allow-soft-reset")
 	let pid = launchScriptHelper(ns, 'ascend.js', ascendArgs);
@@ -491,8 +492,8 @@ async function shouldDelayInstall(ns, player) {
 			(player.has4SData ? 0 : 1E9 * (bitnodeMults?.FourSigmaMarketDataCost || 1));
 		// If we're 50% of the way there, hold off, regardless of the '--wait-for-4s' setting
 		if (totalWorth / totalCost >= options['wait-for-4s-threshold']) {
-			setStatus(ns, `Not installing until scripts purchase the 4SDataTixApi because we have 
-				${(100 * totalWorth / totalCost).toFixed(0)}% of the cost (controlled by --wait-for-4s-threshold)`);
+			setStatus(ns, `Not installing until scripts purchase the 4SDataTixApi because we have ` +
+				`${(100 * totalWorth / totalCost).toFixed(0)}% of the cost (controlled by --wait-for-4s-threshold)`);
 			return true;
 		}
 	}
