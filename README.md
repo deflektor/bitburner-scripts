@@ -1,3 +1,6 @@
+# Insight's Scripts
+Welcome to Insight's Bitburner scripts - one of the Bitburner scripts of all time. Hosted on my personal github because all the best hackers dox themselves.
+
 # Downloading the whole repository
 
 If you manually `nano git-pull.js` from the terminal and copy the [contents of that script](https://raw.githubusercontent.com/alainbryden/bitburner-scripts/main/git-pull.js), you should be able to run it once and download the rest of the files I use. Early-game, many will be useless because they are only enabled by late-game features, but they shouldn't give you too many problems just being there.
@@ -6,13 +9,13 @@ If you manually `nano git-pull.js` from the terminal and copy the [contents of t
 
 If you `run autopilot.js` from the terminal, it will start several other scripts.
 
-You can think of this as the "master orchestrator" script. It will kick off `daemon.js` (you primary hacking script), which in turn kicks off several other helper-scripts. It will monitor your progress throughout the game and take special actions when it can. I don't want to spoil too much for those new to the game, but it's worth mentioning that `SF4` is not required, but is highly-recommended to get the full benefit of this script.
+You can think of this as the "master orchestrator" script. It will kick off `daemon.js` (your primary hacking script), which in turn kicks off several other helper-scripts. It will monitor your progress throughout the game, and take special actions when it can. I don't want to spoil too much for those new to the game, but it's worth mentioning that `SF4` is not required, but is highly-recommended to get the full benefit of this script.
 
 Most scripts can also be run on their own, but are primarily designed to be orchestrated by `autopilot.js` or `daemon.js`.
 
 ## Manually run scripts
 
-Some scripts are meant to be manually run as needed. Most scripts take arguments to tweak or customize their behaviour based on your preferences or special circumstance. More on this in [below](#customizing-script-behaviour-basic).
+Some scripts are meant to be manually run as needed. Most scripts take arguments to tweak or customize their behaviour based on your preferences or special circumstance. More on this [below](#customizing-script-behaviour-basic).
 Run scripts with the `--help` flag to get a list of their arguments, default values, and a brief description of each:
 ![image](https://user-images.githubusercontent.com/2285037/166085058-952b0805-cf4e-4548-8829-1e1ebeb5428b.png)
 You will also see an error-version of this dialog if you make a mistake in how you run the script.
@@ -136,7 +139,10 @@ It's meant as an easy way for me to share code with friends, and track changes a
 While I do like my work to be helpful to others and re-used, I am only willing to put so much effort into customizing it to others' specific needs or whims.
 You should fork the code, and start tweaking it the way you want it to behave. That's more in the spirit of the game!
 
-Hit up the Bitburner Discord with any questions: [Bitburner#alains-scripts](https://discord.com/channels/415207508303544321/935667531111342200)
+Hit up the Bitburner Discord with any questions:
+- Invite to Bitburner Disccord: https://discord.com/invite/TFc3hKD
+- Link to the channel for these scripts: [Bitburner#alains-scripts](https://discord.com/channels/415207508303544321/935667531111342200)
+
 Many helpful folks in there are familiar with my scripts or ones similar to them and can address your questions and concerns far quicker than I can.
 
 

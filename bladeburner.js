@@ -13,7 +13,7 @@ const costAdjustments = {
     "Evasive Systems": 1.2, // Dex/Agi boost. Mildly deprioritized for same reasoning as above.
     "Cloak": 1.5, // Cheap, and stealth ends up with plenty of boost, so we don't need to invest in Cloak as much.
     "Hyperdrive": 2, // Improves stats gained, but not Rank gained. Less useful if training outside of BB
-    "Tracer": 2, // Only boosts Contract success chance, which are relatively easy to begin with. 
+    "Tracer": 2, // Only boosts Contract success chance, which are relatively easy to begin with.
     "Cyber's Edge": 5, // Boosts stamina, but contract counts are much more limiting than stamina, so isn't really needed
     "Hands of Midas": 10 // Improves money gain. It is assumed that Bladeburner will *not* be a main source of income
 };
@@ -95,7 +95,7 @@ const getBBDict = async (ns, strFunction, elements, ...args) => await getNsDataT
 const getBBDictByActionType = async (ns, strFunction, actionType, elements) =>
     await getBBDict(ns, `${strFunction}(ns.args[1], %)`, elements, actionType);
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Gather all one-time bladeburner info using ram-dodging scripts. */
 async function gatherBladeburnerInfo(ns) {
     skillNames = await getBBInfo(ns, 'getSkillNames()');
@@ -129,7 +129,7 @@ const getMinKeyValue = (dict, filteredKeys = null) => (filteredKeys || Object.ke
 const getMaxKeyValue = (dict, filteredKeys = null) => (filteredKeys || Object.keys(dict)).reduce(([k, max], key) =>
     dict[key] > max ? [key, dict[key]] : [k, max], [null, -Number.MAX_VALUE]);
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * The main loop that decides what we should be doing in bladeburner. */
 async function mainLoop(ns) {
     // Get player's updated rank
@@ -278,12 +278,12 @@ async function mainLoop(ns) {
 
         // Pick the first candidate action with a minimum chance of success that exceeds our --success-threshold
         if (!populationUncertain)
-            bestActionName = candidateActions.filter(a => minChance(a) > options['success-threshold'])[0];
+            bestActionName = candidateActions.filter(a => minChance(a) > options['success-threshold'] && getCount(a) >= 1)[0];
         else // Special case for when population uncertainty is high - proceed so long as max chance is high enough
-            bestActionName = candidateActions.filter(a => maxChance(a) > options['success-threshold'])[0];
+            bestActionName = candidateActions.filter(a => maxChance(a) > options['success-threshold'] && getCount(a) >= 1)[0];
 
         if (!bestActionName) // If there were none, allow us to fall-back to an action with a minimum chance >50%, and maximum chance > threshold
-            bestActionName = candidateActions.filter(a => minChance(a) > 0.5 && maxChance(a) > options['success-threshold'])[0];
+            bestActionName = candidateActions.filter(a => minChance(a) > 0.5 && maxChance(a) > options['success-threshold'] && getCount(a) >= 1)[0];
         if (bestActionName) // If we found something to do, log details about its success chance range
             reason = actionSummaryString(bestActionName);
 
@@ -353,7 +353,7 @@ async function mainLoop(ns) {
     currentTaskEndTime = !success ? 0 : Date.now() + expectedDuration + 10; // Pad this a little to ensure we don't interrupt it.
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Helper to switch cities. */
 async function switchToCity(ns, city, reason) {
     const success = await getBBInfo(ns, `switchCity(ns.args[0])`, city);
@@ -362,7 +362,7 @@ async function switchToCity(ns, city, reason) {
     return success;
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Decides how to spend skill points. */
 async function spendSkillPoints(ns) {
     while (true) { // Loop until we determine there's nothing left to spend skill points on
@@ -392,7 +392,7 @@ async function spendSkillPoints(ns) {
     }
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Helper to try and join the Bladeburner faction ASAP. */
 async function tryJoinFaction(ns, rank) {
     if (inFaction) return;
@@ -405,7 +405,7 @@ async function tryJoinFaction(ns, rank) {
 
 let lastCanWorkCheckIdle = true;
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Helper to see if we are able to do bladeburner work */
 async function canDoBladeburnerWork(ns) {
     if (options['ignore-busy-status'] || haveSimulacrum) return true;
@@ -418,7 +418,7 @@ async function canDoBladeburnerWork(ns) {
     return lastCanWorkCheckIdle = false;
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Ensure we're in the Bladeburner division */
 async function beingInBladeburner(ns) {
     // Ensure we're in the Bladeburner division. If not, wait until we've joined it.
@@ -446,10 +446,12 @@ async function beingInBladeburner(ns) {
     }
     log(ns, "INFO: We are in Bladeburner. Starting main loop...")
     // If not disabled, launch an external script to spend hashes on bladeburner rank
-    if (options['disable-spending-hashes'] || !(9 in ownedSourceFiles)) return;
+    if (!(9 in ownedSourceFiles)) return; // Hacknet not unlocked
+    if (options['disable-spending-hashes'])
+        return log(ns, `INFO: Not spending hashes on bladeburner (--disable-spending-hashes flag is set)`);
     const fPath = getFilePath('spend-hacknet-hashes.js');
     const args = ['--spend-on', 'Exchange_for_Bladeburner_Rank', '--spend-on', 'Exchange_for_Bladeburner_SP', '--liquidate'];
-    if (ns.run(fPath, 1, ...args))
+    if (ns.run(fPath, { preventDuplicates: true }, ...args))
         log(ns, `INFO: Launched '${fPath}' to gain Bladeburner Rank and Skill Points more quickly (Can be disabled with --disable-spending-hashes)`)
     else
         log(ns, `WARNING: Failed to launch '${fPath}' (already running?)`)

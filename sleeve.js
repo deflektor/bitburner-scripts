@@ -16,9 +16,12 @@ const argsSchema = [
     ['train-to-defense', 105], // Sleeves will go to the gym until they reach this much Def
     ['train-to-dexterity', 70], // Sleeves will go to the gym until they reach this much Dex
     ['train-to-agility', 70], // Sleeves will go to the gym until they reach this much Agi
+    ['study-to-hacking', 25], // Sleeves will go to university until they reach this much Hak
+    ['study-to-charisma', 25], // Sleeves will go to university until they reach this much Cha
     ['training-reserve', null], // Defaults to global reserve.txt. Can be set to a negative number to allow debt. Sleeves will not train if money is below this amount.
     ['training-cap-seconds', 2 * 60 * 60 /* 2 hours */], // Time since the start of the bitnode after which we will no longer attempt to train sleeves to their target "train-to" settings
     ['disable-spending-hashes-for-gym-upgrades', false], // Set to true to disable spending hashes on gym upgrades when training up sleeves.
+    ['disable-spending-hashes-for-study-upgrades', false], // Set to true to disable spending hashes on study upgrades when smarting up sleeves.
     ['enable-bladeburner-team-building', false], // Set to true to have one sleeve support the main sleeve, and another do recruitment. Otherwise, they will just do more "Infiltrate Synthoids"
     ['disable-bladeburner', false], // Set to true to disable having sleeves workout at the gym (costs money)
     ['failed-bladeburner-contract-cooldown', 30 * 60 * 1000], // Default 30 minutes: time to wait after failing a bladeburner contract before we try again
@@ -30,6 +33,7 @@ const statusUpdateInterval = 10 * 60 * 1000; // Log sleeve status this often, ev
 const trainingReserveFile = '/Temp/sleeves-training-reserve.txt';
 const works = ['security', 'field', 'hacking']; // When doing faction work, we prioritize physical work since sleeves tend towards having those stats be highest
 const trainStats = ['strength', 'defense', 'dexterity', 'agility'];
+const trainSmarts = ['hacking', 'charisma'];
 const sleeveBbContractNames = ["Tracking", "Bounty Hunter", "Retirement"];
 const minBbContracts = 2; // There should be this many contracts remaining before sleeves attempt them
 const minBbProbability = 0.99; // Player chance should be this high before sleeves attempt contracts
@@ -72,7 +76,7 @@ export async function main(ns) {
     }
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Purchases augmentations for sleeves */
 async function manageSleeveAugs(ns, i, budget) {
     // Retrieve and cache the set of available sleeve augs (cached temporarily, but not forever, in case rules around this change)
@@ -111,7 +115,7 @@ async function getPlayerInfo(ns) {
 }
 
 /** @param {NS} ns
- * @returns {Promise<{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }>} */
+ * @returns {Promise<Task>} */
 async function getCurrentWorkInfo(ns) {
     return (await getNsDataThroughFile(ns, 'ns.singularity.getCurrentWork()')) ?? {};
 }
@@ -124,7 +128,7 @@ async function getAllSleeves(ns, numSleeves) {
         `/Temp/sleeve-getSleeve-all.txt`, [...Array(numSleeves).keys()]);
 }
 
-/** @param {NS} ns 
+/** @param {NS} ns
  * Main loop that gathers data, checks on all sleeves, and manages them. */
 async function mainLoop(ns) {
     // Update info
@@ -151,6 +155,9 @@ async function mainLoop(ns) {
     if (canTrain && task.some(t => t?.startsWith("train")) && !options['disable-spending-hashes-for-gym-upgrades'])
         if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Gym Training")', '/Temp/spend-hashes-on-gym.txt'))
             log(ns, `SUCCESS: Bought "Improve Gym Training" to speed up Sleeve training.`, false, 'success');
+    if (canTrain && task.some(t => t?.startsWith("study")) && !options['disable-spending-hashes-for-study-upgrades'])
+        if (await getNsDataThroughFile(ns, 'ns.hacknet.spendHashes("Improve Studying")', '/Temp/spend-hashes-on-study.txt'))
+            log(ns, `SUCCESS: Bought "Improve Studying" to speed up Sleeve studying.`, false, 'success');
     if (playerInBladeburner && (7 in ownedSourceFiles)) {
         const bladeburnerCity = await getNsDataThroughFile(ns, `ns.bladeburner.getCity()`);
         bladeburnerCityChaos = await getNsDataThroughFile(ns, `ns.bladeburner.getCityChaos(ns.args[0])`, null, [bladeburnerCity]);
@@ -159,7 +166,7 @@ async function mainLoop(ns) {
             'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionEstimatedSuccessChance("contract", c)[0]]))',
             '/Temp/sleeve-bladeburner-success-chances.txt', sleeveBbContractNames);
         bladeburnerContractCounts = await getNsDataThroughFile(ns,
-            'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionCountRemaining("contract", c)[0]]))',
+            'Object.fromEntries(ns.args.map(c => [c, ns.bladeburner.getActionCountRemaining("contract", c)]))',
             '/Temp/sleeve-bladeburner-contract-counts.txt', sleeveBbContractNames);
     } else
         bladeburnerCityChaos = 0, bladeburnerContractChances = {}, bladeburnerContractCounts = {};
@@ -202,7 +209,7 @@ async function mainLoop(ns) {
 }
 
 /** Picks the best task for a sleeve, and returns the information to assign and give status updates for that task.
- * @param {NS} ns 
+ * @param {NS} ns
  * @param {Player} playerInfo
  * @param {{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }} playerWorkInfo
  * @param {SleevePerson} sleeve
@@ -229,7 +236,14 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
     }
     // Train if our sleeve's physical stats aren't where we want them
     if (canTrain) {
+        const univClasses = {
+            "hacking": ns.enums.UniversityClassType.algorithms,
+            "charisma": ns.enums.UniversityClassType.leadership
+        };
         let untrainedStats = trainStats.filter(stat => sleeve.skills[stat] < options[`train-to-${stat}`]);
+        let untrainedSmarts = trainSmarts.filter(smart => sleeve.skills[smart] < options[`study-to-${smart}`]);
+
+        // prioritize physical training
         if (untrainedStats.length > 0) {
             if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
                 await promptForTrainingBudget(ns); // If we've never checked, see if we can train into debt.
@@ -241,6 +255,19 @@ async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrai
             var gym = ns.enums.LocationName.Sector12PowerhouseGym;
             return [`train ${trainStat} (${gym})`, `ns.sleeve.setToGymWorkout(ns.args[0], ns.args[1], ns.args[2])`, [i, gym, trainStat],
             /*   */ `training ${trainStat}... ${sleeve.skills[trainStat]}/${(options[`train-to-${trainStat}`])}`];
+            // if we're tough enough, flip over to studying to improve the mental stats
+        } else if (untrainedSmarts.length > 0) {
+            if (playerInfo.money < 5E6 && !promptedForTrainingBudget)
+                await promptForTrainingBudget(ns); // check we can go into training debt
+            if (sleeve.city != ns.enums.CityName.Volhaven) {
+                log(ns, `Moving Sleeve ${i} from ${sleeve.city} to Volhaven so that they can study at ZB Institute.`);
+                await getNsDataThroughFile(ns, 'ns.sleeve.travel(ns.args[0], ns.args[1])', null, [i, ns.enums.CityName.Volhaven]);
+            }
+            var trainSmart = untrainedSmarts.reduce((min, s) => sleeve.skills[s] < sleeve.skills[min] ? s : min, untrainedSmarts[0]);
+            var univ = ns.enums.LocationName.VolhavenZBInstituteOfTechnology;
+            var course = univClasses[trainSmart];
+            return [`study ${trainSmart} (${univ})`, `ns.sleeve.setToUniversityCourse(ns.args[0], ns.args[1], ns.args[2])`, [i, univ, course],
+            /*   */ `studying ${trainSmart}... ${sleeve.skills[trainSmart]}/${(options[`study-to-${trainSmart}`])}`];
         }
     }
     // If player is currently working for faction or company rep, a sleeve can help him out (Note: Only one sleeve can work for a faction)
@@ -319,23 +346,23 @@ function shockRecoveryTask(sleeve, i, reason) {
 }
 
 /** Helper to prepare the crime task
- * @param {NS} ns 
- * @param {SleevePerson} sleeve 
+ * @param {NS} ns
+ * @param {SleevePerson} sleeve
  * @returns {Promise<[string, string, any[], string]>} a 4-tuple of task name, command, args, and status message */
 async function crimeTask(ns, crime, i, sleeve, reason) {
     const successChance = await calculateCrimeChance(ns, sleeve, crime);
     return [`commit ${crime}`, `ns.sleeve.setToCommitCrime(ns.args[0], ns.args[1])`, [i, crime],
     /*   */ `committing ${crime} with chance ${(successChance * 100).toFixed(2)}% because ${reason}` +
-    /*   */ (options.crime || crime == "homicide" ? '' : // If auto-criming, user may be curious how close we are to switching to homicide 
+    /*   */ (options.crime || crime == "homicide" ? '' : // If auto-criming, user may be curious how close we are to switching to homicide
     /*   */     ` (Note: Homicide chance would be ${((await calculateCrimeChance(ns, sleeve, "homicide")) * 100).toFixed(2)}%)`)];
 }
 
 
-/** Sets a sleeve to its designated task, with some extra error handling logic for working for factions. 
- * @param {NS} ns 
+/** Sets a sleeve to its designated task, with some extra error handling logic for working for factions.
+ * @param {NS} ns
  * @param {number} i - Sleeve number
  * @param {string} designatedTask - string describing the designated task
- * @param {string} command - dynamic command to initiate this work 
+ * @param {string} command - dynamic command to initiate this work
  * @param {any[]} args - arguments consumed by the dynamic command
  * */
 async function setSleeveTask(ns, i, designatedTask, command, args) {
@@ -367,7 +394,7 @@ async function setSleeveTask(ns, i, designatedTask, command, args) {
 }
 
 let promptedForTrainingBudget = false;
-/** @param {NS} ns 
+/** @param {NS} ns
  * For when we are at risk of going into debt while training with sleeves.
  * Contains some fancy logic to spawn an external script that will prompt the user and wait for an answer. */
 async function promptForTrainingBudget(ns) {
@@ -379,8 +406,8 @@ async function promptForTrainingBudget(ns) {
             `await ns.write("${trainingReserveFile}", ans ? '-1E100' : '0', "w")`, '/Temp/sleeves-training-reserve-prompt.js');
 }
 
-/** @param {NS} ns 
- * @param {SleevePerson} sleeve 
+/** @param {NS} ns
+ * @param {SleevePerson} sleeve
  * Calculate the chance a sleeve has of committing homicide successfully. */
 async function calculateCrimeChance(ns, sleeve, crimeName) {
     // If not in the cache, retrieve this crime's stats
