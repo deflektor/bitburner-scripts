@@ -87,12 +87,6 @@ export async function main(ns) {
     const opponent = ["Netburners", "Slum Snakes", "The Black Hand", "Tetrads", "Daedalus", "Illuminati"];
     const opponent2 = ["Netburners", "Slum Snakes", "The Black Hand", "Tetrads", "Daedalus", "Illuminati", "????????????"];
 
-    let resetInfo = await getNsDataThroughFile(ns, 'ns.getResetInfo()');
-    if (resetInfo.currentNode == 8) {
-        opponent.splice(index, 0);
-        opponent2.splice(index, 0);
-    }
-
     await start();
 
     /** @param {NS} ns */
@@ -158,6 +152,11 @@ export async function main(ns) {
      * @returns {Promise<{type: "move" | "pass" | "gameOver";x: number;y: number;}>} */
     async function go_makeMove(ns, x, y) {
         return await ns.go.makeMove(x, y);
+        // Note to self - I decided against ram-dodging this request because the "await" actually blocks for a long time.
+        // This program spends 99% of its time waiting for makeMove to complete (which is time-throttled by the game)
+        // As such, this script permantly eats 4GB of the "temporary memory reserve" left by Daemon, which
+        // throws off other scripts which need to "burst" RAM utilization for only an instant.
+        // Better to just consume this 4GB predictably as part of this script.
         //return await getNsDataThroughFile(ns, `await ns.go.makeMove(...ns.args)`, null, [x, y]);
     }
 
